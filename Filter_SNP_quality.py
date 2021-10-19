@@ -8,7 +8,7 @@ from argparse import (ArgumentParser, FileType)
 
 def parse_args():
 	"Parse the input arguments, use '-h' for help"
-	commands = ArgumentParser(description='VCF Filtation.')
+	commands = ArgumentParser(description='Filter VCF by Phred-scaled quality score (QUAL).')
 	commands.add_argument('--vcf', type=str, required=True,
 						help='Mapped raw VCF file, with DP4 scores. (Required)')
 	commands.add_argument('--phr', type=int, required=False, default=20,
