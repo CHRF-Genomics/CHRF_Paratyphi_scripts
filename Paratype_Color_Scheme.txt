@@ -1,0 +1,26 @@
+# Color scheme for clades/genotypes of S. Paratyphi A 
+#
+# Scheme designed by - Yogesh Hooda (yhooda@chrfbd.org), Arif Mohammad Tanmoy (arif.tanmoy@chrfbd.org) and Senjuti Saha (senjutisaha@chrfbd.org)
+#
+# Last modified - February 14th, 2021
+#
+# Clades/Genotypes	#Color_HEX
+0.1	#000000
+1.0	#BD7CB4
+1.1	#7F2470
+1.2	#5A3092
+1.2.1	#7D6AAF
+1.2.2	#492A75
+2.0	#AEC4E3
+2.0.1	#0966B1
+2.1	#58C3C3
+2.2	#008988
+2.3	#00A45D
+2.3.1	#569842
+2.3.2	#ACD589
+2.3.3	#FAED21
+2.4	#FCC777
+2.4.1	#F7A51C
+2.4.2	#FF6D00
+2.4.3	#EC403B
+2.4.4	#B72025
