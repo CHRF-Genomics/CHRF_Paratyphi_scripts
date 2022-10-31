@@ -1,0 +1,14 @@
+# Assembly for Illumina data
+unicycler -1 FASTQ_R1 -2 FASTQ_R2 -o OUTPUT_FOLDER -t 12 --min_fasta_length 200 --keep 1
+
+# Assembly for Illumina data
+unicycler -l NANOPORE_FASTQ -o OUTPUT_FOLDER -t 12 --min_fasta_length 200 --keep 1
+
+# Annotation
+prokka --outdir OUTPUT_FOLDER --cpus 12 --gcode 11 --prefix STRAIN_NAME --locustag STRAIN_NAME --quiet --mincontiglen 200 ASSEMBLED_CONTIGS
+
+# pan-genome build
+roary -p 12 -f OUTPUT_FOLDER -o CLUSTER_OUTPUT_NAME -e --mafft -n GFF_FOLDER/*.gff
+
+# SISTR for serotyping
+sistr -t 12 -i ASSEMBLED_CONTIGS STRAIN_NAME -f csv -o OUTPUT_FOLDER
