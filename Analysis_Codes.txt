@@ -12,3 +12,89 @@ roary -p 12 -f OUTPUT_FOLDER -o CLUSTER_OUTPUT_NAME -e --mafft -n GFF_FOLDER/*.g
 
 # SISTR for serotyping
 sistr -t 12 -i ASSEMBLED_CONTIGS STRAIN_NAME -f csv -o OUTPUT_FOLDER
+
+# Reference Mapping 
+## (build index)
+bowtie2-build REFERENCE_FASTA INDEX_FOLDER/index
+
+## (can be run in loop)
+bowtie2 -x INDEX_FOLDER/index -1 FASTQ_R1 -2 FASTQ_R2 -S OUTPUT_SAM -p 90
+samtools view -ubS --threads 90 OUTPUT_SAM > OUTPUT_BAM
+samtools sort --threads 90 OUTPUT_BAM -o OUTPUT_SORTED_BAM
+samtools index -@ 90 OUTPUT_SORTED_BAM
+samtools mpileup -d 1000 -t DP -t SP -ugBf REFERENCE_FASTA OUTPUT_SORTED_BAM | bcftools call -cv --threads 90 | bcftools view -v snps --threads 90 > OUTPUT_RAW_VCF
+
+## (vcf cleaning - Homogenous sites, Position biases and Phage positions)
+### (python scripts are available in the folder)
+bcftools view --threads 90 -g hom OUTPUT_RAW_VCF > OUTPUT_HOM_VCF
+python Filter_SNP_quality.py.py --vcf OUTPUT_HOM_VCF --output OUTPUT_QUAL_VCF
+vcfutils.pl varFilter -1 0.001 -3 0.001 -4 0.001 OUTPUT_QUAL_VCF > OUTPUT_BIAS_VCF
+python Filter_SNP_in_regions.py --position PtyphiAKU12601.phage_repeat_variation_final.txt --vcf OUTPUT_BIAS_VCF --output OUTPUT_PHG_VCF
+
+## (generate consensus)
+cp OUTPUT_PHG_VCF OUTPUT_PHG_VCF1
+bgzip --threads 12 OUTPUT_PHG_VCF1
+bcftools index --threads 12 OUTPUT_PHG_VCF1.gz
+bcftools consensus -f REFERENCE_FASTA OUTPUT_PHG_VCF1.gz > CONSENSUS_FASTA
+
+## (loop ends here)
+
+## (Run gubbins to identify recombinant regions).
+### (gather all consensus sequences to one file in a folder)
+mkdir GUBBINS/
+cat CONSENSUS_FOLDER/*CONSENSUS_FASTA > GUBBINS/MERGED_CONSENSUS.FASTA
+
+### (run gubbins)
+run_gubbins --threads NN --tree_builder raxml --converge_method recombination --raxml_model GTRGAMMA --verbose MERGED_CONSENSUS.FASTA
+
+### (extract postions of recombinant regions from Gubbins results)
+grep -v '#' GUBBINS/MERGED_CONSENSUS.recombination_predictions.gff | cut -f 4,5 > GUBBINS/MERGED_CONSENSUS.recombinant_predicted_regions.txt
+
+###	(remove SNPs in recombinant regions
+### (can be run in loop)
+python Filter_SNP_in_regions.py --position GUBBINS/MERGED_CONSENSUS.recombinant_predicted_regions.txt --vcf OUTPUT_PHG_VCF --output OUTPUT_RECOMB_VCF
+### (extract SNP positions)
+grep  -v '#' OUTPUT_RECOMB_VCF | cut -f 2 > OUTPUT_RECOMB.pos
+
+### (loop ends)
+
+### (merge all Position files) - not inclusing the outgroup file.
+cat *OUTPUT_RECOMB.pos | sort -ug > OUTPUT_RECOMB_SNPall.pos
+### (count total SNP number)
+wc -l OUTPUT_RECOMB_SNPall.pos
+### (view first SNO positions)
+head -1 OUTPUT_RECOMB_SNPall.pos
+### (view first SNO positions)
+tail -1 OUTPUT_RECOMB_SNPall.pos
+
+## (extract SNPS alleles for Phylogeny)
+### (make folder)
+mkdir SNP_ALLELE/
+
+### (run script) - (should be run in loop)
+python Extract_position_specific_SNP.py -r REFERENCE_FASTA -s OUTPUT_RECOMB_SNPall.pos -v OUTPUT_RECOMB_VCF -i STRAIN_NAME -o SNP_ALLELE/STRAIN_SNP_ALLELE.fasta
+
+### (loop ends)
+
+### (merge SNP allele files)
+mkdir RAxML/
+cat SNP_ALLELE/*_SNP_ALLELE.fasta > RAxML/ALL_SNP_ALLELE.fasta
+sed -i -e 's/>/\n>/g' RAxML/ALL_SNP_ALLELE.fasta
+
+### (run phylogeny)
+### (convert to phylip)
+python fasta2phylip.py -i RAxML/ALL_SNP_ALLELE.fasta -r -o RAxML/ALL_SNP_ALLELE.phylip
+
+### (run RaXML) - Typhi_CT18 is outgroup.
+cd RAxML/
+
+### (compute the best topology ("RAxML_bestTree" file)):
+raxmlHPC-PTHREADS-AVX -p 1206 -s ALL_SNP_ALLELE.phylip -m GTRGAMMA -T 90 -o Typhi_CT18 -n ALL_SNP_ALLELE.bestTree
+
+### (compute 100 bootstraps to assess tree structure ("RAxML_bootstrap" file)):
+raxmlHPC-PTHREADS-AVX -p 1206 -x 4221 -s ALL_SNP_ALLELE.phylip -N 100 -m GTRGAMMA -T 90 -o Typhi_CT18 -n ALL_SNP_ALLELE.bsSupport
+
+### (compute final tree: (with RAxML_bestTree & RAxML_bootstrap))
+raxmlHPC-PTHREADS-AVX -p 1206 -m GTRGAMMA -f b -t ALL_SNP_ALLELE.bestTree -z ALL_SNP_ALLELE.bsSupport -o Typhi_CT18 -n ALL_SNP_ALLELE.bestTree.bsSupport
+
+### ALL_SNP_ALLELE.bestTree.bsSupport - is the tree file in NEWICK format. Tree was viewed on itol.com
